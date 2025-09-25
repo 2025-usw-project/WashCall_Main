@@ -50,7 +50,7 @@ void StateManager::update() {
         stopStartTime = millis(); // 5분 타이머 시작
       }
       if (millis() - stopStartTime > FINISHED_TIMEOUT_MS) {
-        currentState = FINISHED; // 5분 이상 멈춰있으면 '완료'로 최종 판단
+        currentState = FINISHED; // 5분 이상 멈춰있으면 '완료'로 최종 판단gg
       }
     } else if (currentState != FINISHED) {
       currentState = OFF; // 그 외의 경우는 그냥 'OFF'
