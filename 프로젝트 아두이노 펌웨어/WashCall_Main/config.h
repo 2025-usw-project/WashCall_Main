@@ -9,8 +9,14 @@
 extern const char* WIFI_SSID;
 extern const char* WIFI_PASSWORD;
 extern String FASTAPI_URL;
+extern String RAW_DATA_URL; // [건조기 ] (.../raw_data URL)
 extern int MACHINE_ID;
 extern const char* SECRET_KEY;
+
+// NTP (시간 동기화) 서버 설정
+extern const char* NTP_SERVER;
+extern const long GMT_OFFSET_SEC;
+extern const int DAYLIGHT_OFFSET_SEC;
 
 // =================================================================
 // 2. 하드웨어 핀 설정 (Hardware Pin Configuration)
