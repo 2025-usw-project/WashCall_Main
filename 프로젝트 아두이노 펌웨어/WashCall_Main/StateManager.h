@@ -21,7 +21,7 @@ class StateManager {
     // 다른 부품(모듈)들을 연결하여 초기화하는 함수
     void begin(Calibration &calib, VibrationSensor &sensor, Connectivity &conn);
     // 1초마다 호출되어 현재 상태를 계속 업데이트하는 메인 함수
-    void update();
+    void update(VibrationData data);
 
   private:
     // 외부 모듈의 주소를 저장할 포인터 변수
@@ -33,7 +33,6 @@ class StateManager {
     MachineState lastState;    // 바로 이전 상태를 저장하는 변수
 
     unsigned long stopStartTime; // 진동이 멈추기 시작한 시간을 기록하는 타이머
-    unsigned long stateStartTime; // 현재 상태(WASHING/SPINNING)가 시작된 시간을 기록
 
     // --- 운영 데이터 기록용 변수들 ---
     double washTotalMagnitude;  // WASHING 상태 동안 진동 값 총합
