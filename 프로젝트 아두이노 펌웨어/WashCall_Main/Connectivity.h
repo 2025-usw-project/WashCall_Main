@@ -9,15 +9,18 @@
 class Connectivity {
   public:
     Connectivity();
-    void begin(const char* ssid, const char* pass, String url, int id);
+    // [수정됨] 2개의 URL을 받도록 변경
+    void begin(const char* ssid, const char* pass, String update_url, String raw_url, int id);
 
-    // 단일 리포트 전송 함수
-    // isFinished: 현재 상태가 FINISHED인지 여부
-    // washAvg ~ extCnt: FINISHED 상태일 때만 유효한 운영 데이터 값들
-    void sendReport(String state, bool isFinished, float washAvg, float washMax, float spinMax, long timeElapsed);
+    // [유지됨] StateManager가 사용할 기존 함수 (timeElapsed는 제거된 버전)
+    void sendReport(String state, bool isFinished, float washAvg, float washMax, float spinMax);
+
+    // [추가됨] 1초 스트리밍용 새 함수
+    void sendRawData(long timestamp, float magnitude, float deltaX, float deltaY, float deltaZ);
 
   private:
-    String api_url; // 변수 이름 변경 (firebase_url -> api_url, 전체 경로 포함)
+    String api_url_update; // [수정됨] /update URL 저장용
+    String api_url_raw;    // [추가됨] /raw_data URL 저장용
     int machine_id;
 };
 
