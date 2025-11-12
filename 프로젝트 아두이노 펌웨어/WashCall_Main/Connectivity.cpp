@@ -1,14 +1,15 @@
 #include "Connectivity.h"
-#include "config.h" // SECRET_KEY 사용을 위해 포함
+#include "config.h"
+#include "time.h"
 
 Connectivity::Connectivity() {
   // 생성자는 비워둠
 }
 
-// Wi-Fi 연결 및 API URL 설정
-void Connectivity::begin(const char* ssid, const char* pass, String url, int id) {
-  // ino 파일에서 받은 전체 API URL(/update 포함)을 저장
-  this->api_url = url;
+// [수정됨] 2개의 URL을 받도록 변경
+void Connectivity::begin(const char* ssid, const char* pass, String update_url, String raw_url, int id) {
+  this->api_url_update = update_url; // (.../update)
+  this->api_url_raw = raw_url;       // (.../raw_data)
   this->machine_id = id;
 
   Serial.print("Connecting to WiFi...");
@@ -18,29 +19,36 @@ void Connectivity::begin(const char* ssid, const char* pass, String url, int id)
     Serial.print(".");
   }
   Serial.println(" Connected!");
+
+  Serial.println("Synchronizing time with NTP server...");
+  configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
+  
+  time_t now = time(nullptr);
+  while (now < 8 * 3600 * 2) {
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+  }
+  Serial.println(" Time synchronized!");
 }
 
-//  단일 리포트 전송 함수 구현 
-void Connectivity::sendReport(String state, bool isFinished, float washAvg, float washMax, float spinMax, long timeElapsed) {
+// [유지됨] StateManager가 사용할 기존 함수
+void Connectivity::sendReport(String state, bool isFinished, float washAvg, float washMax, float spinMax) {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
 
-    // ino 파일에 정의된 전체 API 경로를 사용
-    http.begin(api_url);
+    http.begin(api_url_update); // [수정됨] 상태 보고용 URL
     http.addHeader("Content-Type", "application/json");
 
     StaticJsonDocument<512> jsonDoc;
 
-    // --- 항상 포함되는 기본 필드들 ---
     jsonDoc["machine_id"] = machine_id;
     jsonDoc["secret_key"] = SECRET_KEY;
     jsonDoc["status"] = state;
     jsonDoc["machine_type"] = "washer";
-    jsonDoc["timestamp"] = 0; // 실제 시간으로 변경 필요 (NTP 동기화)
-    jsonDoc["battery"] = 100; // 실제 배터리 값으로 변경 필요
-    jsonDoc["time_elapsed"] = timeElapsed; // 경과 시간
+    jsonDoc["timestamp"] = time(nullptr);
+    jsonDoc["battery"] = 100;
 
-    // --- FINISHED 상태일 때만 포함되는 사이클 요약 필드들 ---
     if (isFinished) {
       jsonDoc["wash_avg_magnitude"] = washAvg;
       jsonDoc["wash_max_magnitude"] = washMax;
@@ -59,11 +67,47 @@ void Connectivity::sendReport(String state, bool isFinished, float washAvg, floa
       Serial.print("HTTP Response code: ");
       Serial.println(httpResponseCode);
     } else {
-      Serial.print("Error sending POST: ");
+      Serial.print("Error sending POST (Report): ");
       Serial.println(httpResponseCode);
     }
     http.end();
   } else {
     Serial.println("WiFi Disconnected. Cannot send report data.");
+  }
+}
+
+// [추가됨] 1초 스트리밍 데이터 전송 함수
+void Connectivity::sendRawData(long timestamp, float magnitude, float deltaX, float deltaY, float deltaZ) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    http.begin(api_url_raw); // [수정됨] 원본 데이터 전송용 URL
+    http.addHeader("Content-Type", "application/json");
+
+    StaticJsonDocument<256> jsonDoc;
+
+    jsonDoc["machine_id"] = machine_id;
+    jsonDoc["timestamp"] = timestamp;
+    jsonDoc["magnitude"] = magnitude;
+    jsonDoc["deltaX"] = deltaX;
+    jsonDoc["deltaY"] = deltaY;
+    jsonDoc["deltaZ"] = deltaZ;
+
+    String jsonPayload;
+    serializeJson(jsonDoc, jsonPayload);
+
+    // 1초마다 로그가 너무 많이 뜨므로 주석 처리
+    // Serial.println("Sending Raw Data:");
+    // Serial.println(jsonPayload);
+
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode <= 0) {
+      Serial.print("Error sending POST (Raw): ");
+      Serial.println(httpResponseCode);
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected. Cannot send raw data.");
   }
 }
