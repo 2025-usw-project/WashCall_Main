@@ -6,8 +6,6 @@ StateManager::StateManager() {
   currentState = OFF;
   lastState = OFF;
   stopStartTime = 0;
-  // [추가됨] 상태 시작 시간 초기화
-  stateStartTime = 0; 
   resetCycleData();
 }
 
@@ -33,7 +31,7 @@ void StateManager::resetCycleData() {
 }
 
 // 1초마다 실행되는 메인 로직
-void StateManager::update() {
+void StateManager::update(VibrationData data) {
   // 1. 캘리브레이션 모드 처리
   if (currentState == CALIBRATING) {
     calibration->runCalibrationCycle(*sensor);
@@ -41,12 +39,8 @@ void StateManager::update() {
   }
 
   // 2. 일반 모드 처리
-  VibrationData data = sensor->getVibration();
   MachineState nextState = currentState; // 다음 예상 상태
   bool justFinished = false; // FINISHED로 방금 변경되었는지 확인
-  
-  // [추가됨] 서버로 보낼 경과 시간 (초 단위)
-  unsigned long timeElapsed = 0; 
 
   // 2-1. 진동 세기 기준으로 상태 판단 및 데이터 기록
   if (data.magnitude > calibration->getSpinThreshold()) { // 탈수 기준점보다 강함
@@ -54,8 +48,6 @@ void StateManager::update() {
       // 새 사이클 시작 감지 (OFF/FINISHED에서 시작)
       if (currentState == OFF || currentState == FINISHED) {
          resetCycleData(); // 새 사이클이므로 이전 기록 초기화
-         // [추가됨] 상태 시작 시간 기록
-         stateStartTime = millis(); 
       }
       nextState = SPINNING;
       if (data.magnitude > spinMaxMagnitude) {
@@ -70,8 +62,6 @@ void StateManager::update() {
     // 새 사이클 시작 감지 (OFF/FINISHED에서 시작)
     if (currentState == OFF || currentState == FINISHED) {
        resetCycleData(); // 새 사이클이므로 이전 기록 초기화
-       // [추가됨] 상태 시작 시간 기록
-       stateStartTime = millis(); 
     }
     nextState = WASHING;
     washTotalMagnitude += data.magnitude;
@@ -103,15 +93,6 @@ void StateManager::update() {
         nextState = FINISHED;
     }
   }
-  
-  // [추가됨] 현재 상태 경과 시간 계산 (초 단위)
-  // WASHING, SPINNING, EXT_VIBE 상태일 때만 경과 시간을 추적
-  if (currentState == WASHING || currentState == SPINNING || currentState == EXTERNAL_VIBRATION) {
-      // (현재 시간 - 상태 시작 시간) / 1000 (밀리초를 초로 변환)
-      timeElapsed = (millis() - stateStartTime) / 1000; 
-  }
-  // OFF/FINISHED로 상태가 변경될 때 timeElapsed는 0으로 전송됩니다.
-
 
   // 3. 상태 변화 감지 및 서버 전송
   if (nextState != lastState) {
@@ -122,27 +103,20 @@ void StateManager::update() {
 
     currentState = nextState; 
     
-    // [추가됨] 새로운 사이클이 시작되었을 때 stateStartTime을 다시 기록
-    // (예: EXT_VIBE -> WASHING으로 다시 돌아왔을 때)
-    if (currentState == WASHING || currentState == SPINNING || currentState == EXTERNAL_VIBRATION) {
-      stateStartTime = millis();
-    }
 
 
     if (currentState != CALIBRATING) {
-      // FINISHED 상태 전송 (운영 데이터만 보냄, timeElapsed=0)
+      // FINISHED 상태 전송 (운영 데이터만 보냄)
       if (justFinished) {
           float washAvgMagnitude = 0;
           if (washVibrationCount > 0) {
               washAvgMagnitude = static_cast<float>(washTotalMagnitude / washVibrationCount);
           }
-          // [수정됨] timeElapsed를 0으로 전달 (FINISHED는 경과 시간이 아닌 결과)
-          connectivity->sendReport(stateToString(currentState), true, washAvgMagnitude, washMaxMagnitude, spinMaxMagnitude, 0); 
+          connectivity->sendReport(stateToString(currentState), true, washAvgMagnitude, washMaxMagnitude, spinMaxMagnitude); 
       }
       // 그 외 상태 전송 (WASHING, SPINNING, OFF, EXT_VIBE)
       else {
-          // [수정됨] timeElapsed를 함께 전달 (OFF 상태가 되면 timeElapsed는 0으로 전달됨)
-          connectivity->sendReport(stateToString(currentState), false, 0, 0, 0, timeElapsed); 
+          connectivity->sendReport(stateToString(currentState), false, 0, 0, 0); 
       }
     }
 
